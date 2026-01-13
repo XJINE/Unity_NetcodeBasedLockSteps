@@ -25,8 +25,9 @@ public class LockStepManager : NetworkBehaviour
     private          float                 _lastProcessDelayStepTime;
     private readonly NetworkList<StepData> _stepDataList = new();
 
-    public bool EnableSendStep    { get;         set; } = true; // For debugging.
-    public bool EnableStep        { get;         set; } = true; // For debugging.
+    public bool EnableSendStep    { get; set; } = true; // For debugging.
+    public bool EnableStep        { get; set; } = true; // For debugging.
+
     public int  StepCountInServer { get; private set; }
     public int  StepCountInClient { get; private set; }
 
@@ -50,7 +51,7 @@ public class LockStepManager : NetworkBehaviour
 
     private void Update()
     {
-        if(NetworkManager.IsServer || NetworkManager.IsHost)
+        if(NetworkManager.IsServer)
         {
             SendStep();
         }
