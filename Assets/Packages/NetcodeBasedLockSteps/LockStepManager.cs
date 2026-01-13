@@ -6,7 +6,7 @@ using Unity.Netcode;
 namespace NetcodeBasedLockSteps {
 public class LockStepManager : NetworkBehaviour
 {
-    private struct StepData : IEquatable<StepData>
+    private struct StepData : IEquatable<StepData>, INetworkSerializeByMemcpy
     {
         public int                     StepCount;
         public FixedList512Bytes<byte> Bytes;
@@ -22,14 +22,17 @@ public class LockStepManager : NetworkBehaviour
     public int   delaySteps         = 0;
     public float delayStepsInterval = 0.1f;
 
-    private          float                 _lastProcessDelayStepTime;
+    private float _lastProcessDelayStepTime;
+    private float _lastStepTime;
+
     private readonly NetworkList<StepData> _stepDataList = new();
 
     public bool EnableSendStep    { get; set; } = true; // For debugging.
     public bool EnableStep        { get; set; } = true; // For debugging.
 
-    public int  StepCountInServer { get; private set; }
-    public int  StepCountInClient { get; private set; }
+    public int   StepCountInServer { get; private set; }
+    public int   StepCountInClient { get; private set; }
+    public float StepInterval      { get; private set; }
 
     public Func<INetworkSerializable>    GetDataFunc { get; set; }
     public Action<int, FastBufferReader> StepFunc    { get; set; }
@@ -169,5 +172,8 @@ public class LockStepManager : NetworkBehaviour
 
             StepCountInClient++;
         }
+
+        StepInterval  = Time.timeSinceLevelLoad - _lastStepTime;
+        _lastStepTime = Time.timeSinceLevelLoad;
     }
 }}
