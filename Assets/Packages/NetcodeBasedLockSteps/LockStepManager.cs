@@ -27,8 +27,8 @@ public class LockStepManager : NetworkBehaviour
 
     private readonly NetworkList<StepData> _stepDataList = new();
 
-    public bool EnableSendStep    { get; set; } = true; // For debugging.
-    public bool EnableStep        { get; set; } = true; // For debugging.
+    public bool EnableSendStep { get; set; } = true; // For debugging.
+    public bool EnableStep     { get; set; } = true; // For debugging.
 
     public int   StepCountInServer { get; private set; }
     public int   StepCountInClient { get; private set; }
