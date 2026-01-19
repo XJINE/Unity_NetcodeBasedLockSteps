@@ -1,84 +1,56 @@
-using NetcodeBasedLockSteps;
-using Unity.Netcode;
+using Mirror;
+using MirrorBasedLockSteps;
 using UnityEngine;
 
 public class LockStepSample : MonoBehaviour
 {
     [SerializeField] private GameObject target;
 
-    private NetworkManager  _networkManager;
     private LockStepManager _lockStepManager;
     private bool            _move = true;
 
-    private struct StepData : INetworkSerializable
+    [System.Serializable]
+    public struct StepDataSample: NetworkMessage
     {
         public Vector3 Position;
-
-        public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
-        {
-            serializer.SerializeValue(ref Position);
-        }
     }
 
     private void Start()
     {
-        _networkManager  = NetworkManager.Singleton;
         _lockStepManager = FindAnyObjectByType<LockStepManager>();
-
         _lockStepManager.GetDataFunc = GetData;
         _lockStepManager.StepFunc    = OnStep;
     }
 
     private void OnGUI()
     {
-        var isHost   = _networkManager.IsHost;
-        var isServer = _networkManager.IsServer;
-
-        if(!_networkManager.IsConnectedClient && !isServer)
+        if(NetworkClient.isConnected || NetworkServer.active)
         {
-            if (GUILayout.Button("Start as Host"))   { _networkManager.StartHost();   }
-            if (GUILayout.Button("Start as Server")) { _networkManager.StartServer(); }
-            if (GUILayout.Button("Start as Client")) { _networkManager.StartClient(); }
-        }
-        else
-        {
-            GUILayout.Label(isHost ? "Host" : isServer ? "Server" : "Client");
-            GUILayout.Label("Step Count : " + (isServer ? _lockStepManager.StepCountInServer
-                                                        : _lockStepManager.StepCountInClient));
-
-            GUILayout.Label("Position : "      + target.transform.position             .ToString("F2"));
-            GUILayout.Label("Step Interval : " + (_lockStepManager.StepInterval * 1000).ToString("F2"));
-            GUILayout.Label("FPS : "           + ( 1 / _lockStepManager.StepInterval)  .ToString("F2"));
-
-            if (isHost || isServer)
-            {
-                if (GUILayout.Button(_move ? "Stop" : "Move"))
-                {
-                    _move = !_move;
-                }
-            }
+            GUILayout.Label("Time : "       + Time.timeSinceLevelLoad.ToString("F2"));
+            GUILayout.Label("Step Count : " + (NetworkClient.active ? _lockStepManager.StepCountInClient
+                                                                    : _lockStepManager.StepCountInServer));
         }
     }
 
-    private INetworkSerializable GetData()
+    private byte[] GetData(NetworkWriter writer)
     {
-        return new StepData()
+        var stepData = new StepDataSample()
         {
             Position = _move ? Random.onUnitSphere : Vector3.zero
         };
+
+        NetworkMessages.Pack(stepData, writer);
+        return writer.ToArray();
     }
 
-    private void OnStep(int stepCount, FastBufferReader reader)
+    private void OnStep(int stepCount, NetworkReader reader)
     {
-        reader.ReadValueSafe(out StepData stepData);
+        var stepData     = reader.Read<StepDataSample>();
+        var nextPosition = target.transform.position + stepData.Position;
+            nextPosition.x = Mathf.Clamp(nextPosition.x, -3f, 3f);
+            nextPosition.y = Mathf.Clamp(nextPosition.y, -3f, 3f);
+            nextPosition.z = Mathf.Clamp(nextPosition.z, -3f, 3f);
 
-        var origin = target.transform.position += stepData.Position;
-
-        if (origin.x < -3) { target.transform.position = new Vector3(-3, origin.y, origin.z); }
-        if (3 < origin.x)  { target.transform.position = new Vector3( 3, origin.y, origin.z); }
-        if (origin.y < -3) { target.transform.position = new Vector3(origin.x, -3, origin.z); }
-        if (3 < origin.y)  { target.transform.position = new Vector3(origin.x,  3, origin.z); }
-        if (origin.z < -3) { target.transform.position = new Vector3(origin.x, origin.y, -3); }
-        if (3 < origin.z)  { target.transform.position = new Vector3(origin.x, origin.y,  3); }
+        target.transform.position = nextPosition;
     }
 }
