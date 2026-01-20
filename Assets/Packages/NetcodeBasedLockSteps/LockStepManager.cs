@@ -8,6 +8,10 @@ public class LockStepManager : NetworkBehaviour
 {
     private struct StepData : IEquatable<StepData>, INetworkSerializeByMemcpy
     {
+        // NOTE:
+        // Ideally, the data size should be 1024 bytes due to UDP constraints,
+        // but the next available size after 512 is 4096.
+
         public int                     StepCount;
         public FixedList512Bytes<byte> Bytes;
 
@@ -144,7 +148,7 @@ public class LockStepManager : NetworkBehaviour
         if (!foundStep)
         {
             Debug.Log("Required step is not in the data list.");
-            NetworkManager.Shutdown();
+            return;
         }
 
         var limit = Mathf.Min(index + maxStepsPerFrame, _stepDataList.Count - delaySteps);
@@ -155,14 +159,20 @@ public class LockStepManager : NetworkBehaviour
             _lastProcessDelayStepTime = Time.time;
         }
 
+        if (limit <= index)
+        {
+            return;
+        }
+
         for (; index < limit; index++)
         {
             var data = _stepDataList[index];
 
             if (data.StepCount != StepCountInClient)
             {
-                Debug.Log("Fatal Error in LockStep");
+                Debug.LogError($"Fatal Error in LockStep: Expected step {StepCountInClient}, but got {data.StepCount}");
                 NetworkManager.Shutdown();
+                return;
             }
 
             using (var reader = new FastBufferReader(data.Bytes.ToArray(), Allocator.Temp))
