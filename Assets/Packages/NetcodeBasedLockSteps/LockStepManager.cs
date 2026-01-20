@@ -175,7 +175,7 @@ public class LockStepManager : NetworkBehaviour
                 return;
             }
 
-            using (var reader = new FastBufferReader(data.Bytes.ToArray(), Allocator.Temp))
+            using (var reader = new FastBufferReader(data.Bytes.ToNativeArray(Allocator.Temp), Allocator.None))
             {
                 StepFunc(data.StepCount, reader);
             }

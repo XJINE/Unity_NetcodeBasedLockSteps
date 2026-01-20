@@ -1,7 +1,7 @@
 {
     "name"       : "com.xjine.netcode_based_lock_steps",
     "displayName": "Netcode Based Lock Steps", 
-    "version"    : "0.0.1",
+    "version"    : "0.0.2",
     "unity"      : "6000.0",
     "description": "LockStep helper with Netcode.",
     "author"     :

@@ -70,15 +70,14 @@ public class LockStepSample : MonoBehaviour
 
     private void OnStep(int stepCount, FastBufferReader reader)
     {
-        reader.ReadValueSafe(out StepData stepData);
+        reader.ReadValue(out StepData stepData);
+        // reader.ReadValueSafe(out StepData stepData);
 
-        var origin = target.transform.position += stepData.Position;
+        var nextPosition   = target.transform.position + stepData.Position;
+            nextPosition.x = Mathf.Clamp(nextPosition.x, -3f, 3f);
+            nextPosition.y = Mathf.Clamp(nextPosition.y, -3f, 3f);
+            nextPosition.z = Mathf.Clamp(nextPosition.z, -3f, 3f);
 
-        if (origin.x < -3) { target.transform.position = new Vector3(-3, origin.y, origin.z); }
-        if (3 < origin.x)  { target.transform.position = new Vector3( 3, origin.y, origin.z); }
-        if (origin.y < -3) { target.transform.position = new Vector3(origin.x, -3, origin.z); }
-        if (3 < origin.y)  { target.transform.position = new Vector3(origin.x,  3, origin.z); }
-        if (origin.z < -3) { target.transform.position = new Vector3(origin.x, origin.y, -3); }
-        if (3 < origin.z)  { target.transform.position = new Vector3(origin.x, origin.y,  3); }
+        target.transform.position = nextPosition;
     }
 }
