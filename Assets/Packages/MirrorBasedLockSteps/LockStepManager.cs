@@ -28,8 +28,8 @@ public class LockStepManager : NetworkBehaviour
     public int   StepCountInClient { get; private set; }
     public float StepInterval      { get; private set; }
 
-    public Func<NetworkWriter, byte[]> GetDataFunc { get; set; }
-    public Action<int, NetworkReader>  StepFunc    { get; set; }
+    public Func  <int, NetworkWriter, byte[]> GetDataFunc { get; set; }
+    public Action<int, NetworkReader>         StepFunc    { get; set; }
 
     private void Update()
     {
@@ -60,10 +60,8 @@ public class LockStepManager : NetworkBehaviour
             return;
         }
 
-        var writer = new NetworkWriter();
-        writer.Reset();
-
-        var bytes = GetDataFunc(writer);
+        using var writer = NetworkWriterPool.Get();
+              var bytes  = GetDataFunc(StepCountInServer, writer);
 
         if (bytes == null || bytes.Length == 0)
         {

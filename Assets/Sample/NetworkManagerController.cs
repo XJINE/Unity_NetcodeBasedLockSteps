@@ -3,20 +3,15 @@ using UnityEngine;
 
 public class NetworkManagerController : MonoBehaviour
 {
-    private NetworkManager _networkManager;
-
-    private void Start()
-    {
-        _networkManager  = NetworkManager.singleton;
-    }
-
     private void OnGUI()
     {
+        var networkManager = NetworkManager.singleton;
+
         if(!NetworkClient.isConnected && !NetworkServer.active && !NetworkServer.activeHost)
         {
-            if (GUILayout.Button("Start as Host"))   { _networkManager.StartHost();   }
-            if (GUILayout.Button("Start as Server")) { _networkManager.StartServer(); }
-            if (GUILayout.Button("Start as Client")) { _networkManager.StartClient(); }
+            if (GUILayout.Button("Start as Host"))   { networkManager.StartHost();   }
+            if (GUILayout.Button("Start as Server")) { networkManager.StartServer(); }
+            if (GUILayout.Button("Start as Client")) { networkManager.StartClient(); }
         }
     }
 }

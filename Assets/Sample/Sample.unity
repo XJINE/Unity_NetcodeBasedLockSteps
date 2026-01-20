@@ -291,7 +291,7 @@ MonoBehaviour:
   disconnectInactiveConnections: 0
   disconnectInactiveTimeout: 60
   authenticator: {fileID: 0}
-  playerPrefab: {fileID: 0}
+  playerPrefab: {fileID: 8701397318629471951, guid: 9f0f05b0507550b4796358780eac88f6, type: 3}
   autoCreatePlayer: 1
   playerSpawnMethod: 0
   spawnPrefabs: []
@@ -357,9 +357,9 @@ MonoBehaviour:
   syncMode: 0
   syncInterval: 0
   maxStepLogs: 10000
-  maxStepsPerFrame: 1
+  maxStepsPerFrame: 10
   delaySteps: 0
-  delayStepsInterval: 0.1
+  delayStepsInterval: 0
 --- !u!114 &1106250662
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -405,6 +405,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   target: {fileID: 1237653918}
+  move: 1
 --- !u!1 &1237653918
 GameObject:
   m_ObjectHideFlags: 0

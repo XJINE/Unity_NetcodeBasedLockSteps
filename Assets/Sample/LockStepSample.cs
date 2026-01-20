@@ -5,9 +5,9 @@ using UnityEngine;
 public class LockStepSample : MonoBehaviour
 {
     [SerializeField] private GameObject target;
+    [SerializeField] private bool       move = true;
 
     private LockStepManager _lockStepManager;
-    private bool            _move = true;
 
     [System.Serializable]
     public struct StepDataSample: NetworkMessage
@@ -17,7 +17,7 @@ public class LockStepSample : MonoBehaviour
 
     private void Start()
     {
-        _lockStepManager = FindAnyObjectByType<LockStepManager>();
+        _lockStepManager             = FindAnyObjectByType<LockStepManager>();
         _lockStepManager.GetDataFunc = GetData;
         _lockStepManager.StepFunc    = OnStep;
     }
@@ -29,24 +29,32 @@ public class LockStepSample : MonoBehaviour
             GUILayout.Label("Time : "       + Time.timeSinceLevelLoad.ToString("F2"));
             GUILayout.Label("Step Count : " + (NetworkClient.active ? _lockStepManager.StepCountInClient
                                                                     : _lockStepManager.StepCountInServer));
+            GUILayout.Label("Target : " + target.transform.position.ToString("F2"));
+            GUILayout.Label("FPS : " + (1.0f / _lockStepManager.StepInterval).ToString("F2"));
         }
     }
 
-    private byte[] GetData(NetworkWriter writer)
+    private byte[] GetData(int stepCount, NetworkWriter writer)
     {
         var stepData = new StepDataSample()
         {
-            Position = _move ? Random.onUnitSphere : Vector3.zero
+            Position = move ? Random.insideUnitSphere : Vector3.zero
         };
+        
+        // Debug.Log($"1 : ({stepCount}) : {stepData.Position}");
 
-        NetworkMessages.Pack(stepData, writer);
+        writer.Write(stepData);
+
         return writer.ToArray();
     }
 
     private void OnStep(int stepCount, NetworkReader reader)
     {
-        var stepData     = reader.Read<StepDataSample>();
-        var nextPosition = target.transform.position + stepData.Position;
+        var stepData = reader.Read<StepDataSample>();
+
+        // Debug.Log($"2 : ({stepCount}) : {stepData.Position}");
+
+        var nextPosition   = target.transform.position + stepData.Position;
             nextPosition.x = Mathf.Clamp(nextPosition.x, -3f, 3f);
             nextPosition.y = Mathf.Clamp(nextPosition.y, -3f, 3f);
             nextPosition.z = Mathf.Clamp(nextPosition.z, -3f, 3f);
