@@ -2,7 +2,6 @@
 using Unity.Collections;
 using UnityEngine;
 using Unity.Netcode;
-using UnityEngine.Events;
 
 namespace NetcodeBasedLockSteps {
 public class LockStepManager : NetworkBehaviour
@@ -26,11 +25,6 @@ public class LockStepManager : NetworkBehaviour
     public int   maxStepsPerFrame   = 3;
     public int   delaySteps         = 0;
     public float delayStepsInterval = 0.1f;
-
-    // NOTE:
-    // This is useful for server or client only setups.
-    public UnityEvent onNetworkSpawn;
-    public UnityEvent onServerStart;
 
     private float _lastProcessDelayStepTime;
     private float _lastStepTime;
@@ -60,16 +54,6 @@ public class LockStepManager : NetworkBehaviour
         }
 
         base.OnDestroy();
-    }
-
-    public override void OnNetworkSpawn()
-    {
-        onNetworkSpawn.Invoke();
-
-        if (IsServer || IsHost)
-        {
-            onServerStart.Invoke();
-        }
     }
 
     private void Update()
