@@ -4,8 +4,17 @@ using UnityEngine;
 using Unity.Netcode;
 
 namespace NetcodeBasedLockSteps {
+public interface IStepData<out T> where T : unmanaged, IStepData<T>
+{
+    int StepCount  { get; }
+    int BufferSize { get; }
 
-public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour where TStepData : unmanaged, IEquatable<TStepData>
+    T CreateStepData(int stepCount, FastBufferWriter writer);
+    NativeArray<byte> GetBytes(Allocator allocator);
+}
+
+public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
+    where TStepData : unmanaged, IEquatable<TStepData>, IStepData<TStepData>
 {
     public int   maxStepLogs        = 10000;
     public int   maxStepsPerFrame   = 3;
@@ -26,12 +35,6 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour where TS
 
     public Func<INetworkSerializable>    GetDataFunc { get; set; }
     public Action<int, FastBufferReader> StepFunc    { get; set; }
-
-
-    protected abstract int BufferSize { get; }
-    protected abstract TStepData CreateStepData(int stepCount, FastBufferWriter writer);
-    protected abstract int GetStepCount(in TStepData data);
-    protected abstract NativeArray<byte> GetBytes(TStepData data, Allocator allocator);
 
     private void Start()
     {
@@ -60,7 +63,7 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour where TS
 
     private void OnClientConnected(ulong clientId)
     {
-        var missingFirstData = _stepDataList.Count != 0 && 0 < GetStepCount(_stepDataList[0]);
+        var missingFirstData = _stepDataList.Count != 0 && 0 < _stepDataList[0].StepCount;
 
         if (!missingFirstData)
         {
@@ -84,11 +87,13 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour where TS
             return;
         }
 
-        using (var writer = new FastBufferWriter(BufferSize, Allocator.Temp))
+        var template = default(TStepData);
+
+        using (var writer = new FastBufferWriter(template.BufferSize, Allocator.Temp))
         {
             writer.WriteNetworkSerializable(data);
 
-            _stepDataList.Add(CreateStepData(StepCountInServer, writer));
+            _stepDataList.Add(template.CreateStepData(StepCountInServer, writer));
         }
 
         while (maxStepLogs < _stepDataList.Count)
@@ -106,9 +111,13 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour where TS
             return;
         }
 
+        // NOTE:
+        // On remote clients the NetworkList may contain duplicated / non-contiguous
+        // entries during sync, so the target step must be located by value
+        // (searching backward from the tail) rather than by index arithmetic.
         var index = _stepDataList.Count - 1;
 
-        if (GetStepCount(_stepDataList[index]) < StepCountInClient)
+        if (_stepDataList[index].StepCount < StepCountInClient)
         {
             return;
         }
@@ -117,7 +126,7 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour where TS
 
         for (; 0 <= index; index--)
         {
-            if (GetStepCount(_stepDataList[index]) != StepCountInClient)
+            if (_stepDataList[index].StepCount != StepCountInClient)
             {
                 continue;
             }
@@ -149,7 +158,7 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour where TS
         for (; index < limit; index++)
         {
             var data      = _stepDataList[index];
-            var stepCount = GetStepCount(data);
+            var stepCount = data.StepCount;
 
             if (stepCount != StepCountInClient)
             {
@@ -158,7 +167,7 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour where TS
                 return;
             }
 
-            using (var reader = new FastBufferReader(GetBytes(data, Allocator.Temp), Allocator.None))
+            using (var reader = new FastBufferReader(data.GetBytes(Allocator.Temp), Allocator.None))
             {
                 StepFunc(stepCount, reader);
             }
@@ -166,7 +175,7 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour where TS
             StepCountInClient++;
         }
 
-        StepInterval  = Time.timeSinceLevelLoad - _lastStepTime;
-        _lastStepTime = Time.timeSinceLevelLoad;
+        StepInterval  = Time.time - _lastStepTime;
+        _lastStepTime = Time.time;
     }
 }}
