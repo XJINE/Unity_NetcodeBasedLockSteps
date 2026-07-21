@@ -10,7 +10,7 @@ public interface IStepData<out T> where T : unmanaged, IStepData<T>
     int BufferSize { get; }
 
     T CreateStepData(int stepCount, FastBufferWriter writer);
-    NativeArray<byte> GetBytes();
+    NativeArray<byte> GetBytes(); // Do not define as a property since it requires alloc.
 }
 
 public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
@@ -111,10 +111,6 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
             return;
         }
 
-        // NOTE:
-        // On remote clients the NetworkList may contain duplicated / non-contiguous
-        // entries during sync, so the target step must be located by value
-        // (searching backward from the tail) rather than by index arithmetic.
         var index = _stepDataList.Count - 1;
 
         if (_stepDataList[index].StepCount < StepCountInClient)
