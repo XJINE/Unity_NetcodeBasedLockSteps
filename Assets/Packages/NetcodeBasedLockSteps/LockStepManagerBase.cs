@@ -33,8 +33,8 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
     public int   StepCountInClient { get; private set; }
     public float StepInterval      { get; private set; }
 
-    public Func<INetworkSerializable>    GetDataFunc { get; set; }
-    public Action<int, FastBufferReader> StepFunc    { get; set; }
+    public Func<FastBufferWriter, bool>  WriteStepDataFunc { get; set; }
+    public Action<int, FastBufferReader> StepFunc          { get; set; }
 
     private void Start()
     {
@@ -75,23 +75,29 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
 
     private void SendStep()
     {
-        if (!EnableSendStep || GetDataFunc is null)
+        if (!EnableSendStep || WriteStepDataFunc is null)
         {
             return;
         }
 
-        var data = GetDataFunc();
-
-        if (data is null)
-        {
-            return;
-        }
+        // NOTE:
+        // The 'template' implementation isn't the cleanest,
+        // but it's better to early-return to avoid breaking lockstep.
 
         var template = default(TStepData);
 
         using (var writer = new FastBufferWriter(template.BufferSize, Allocator.Temp))
         {
-            writer.WriteNetworkSerializable(data);
+            if (!WriteStepDataFunc(writer))
+            {
+                return;
+            }
+
+            if (template.BufferSize < writer.Length)
+            {
+                Debug.LogError($"Step data exceeds buffer size: {writer.Length} > {template.BufferSize}");
+                return;
+            }
 
             _stepDataList.Add(template.CreateStepData(StepCountInServer, writer));
         }

@@ -25,8 +25,8 @@ public class LockStepSample : MonoBehaviour
         _networkManager  = NetworkManager.Singleton;
         _lockStepManager = FindAnyObjectByType<LockStepManager>();
 
-        _lockStepManager.GetDataFunc = GetData;
-        _lockStepManager.StepFunc    = OnStep;
+        _lockStepManager.WriteStepDataFunc = WriteStepData;
+        _lockStepManager.StepFunc          = OnStep;
     }
 
     private void OnGUI()
@@ -60,12 +60,16 @@ public class LockStepSample : MonoBehaviour
         }
     }
 
-    private INetworkSerializable GetData()
+    private bool WriteStepData(FastBufferWriter writer)
     {
-        return new StepData()
+        var data = new StepData
         {
             Position = _move ? Random.onUnitSphere : Vector3.zero
         };
+
+        writer.WriteNetworkSerializable(data);
+
+        return true;
     }
 
     private void OnStep(int stepCount, FastBufferReader reader)
