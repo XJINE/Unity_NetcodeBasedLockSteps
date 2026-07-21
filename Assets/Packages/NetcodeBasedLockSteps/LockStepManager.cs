@@ -10,9 +10,9 @@ public class LockStepManager : LockStepManagerBase<LockStepManager.StepData>
         // NOTE:
         // Ideally, the data size should be 1024 bytes due to UDP constraints,
         // but the next available size after 512 is 4096.
-        public FixedList512Bytes<byte> Bytes;
+        private FixedList512Bytes<byte> _bytes;
 
-        public int StepCount { get; set; }
+        public int StepCount { get; private set; }
         public int BufferSize => 512;
 
         public StepData CreateStepData(int stepCount, FastBufferWriter writer)
@@ -26,19 +26,19 @@ public class LockStepManager : LockStepManagerBase<LockStepManager.StepData>
 
             return new StepData
             {
+                _bytes    = bytes,
                 StepCount = stepCount,
-                Bytes     = bytes,
             };
         }
 
-        public NativeArray<byte> GetBytes(Allocator allocator)
+        public NativeArray<byte> GetBytes()
         {
-            return Bytes.ToNativeArray(allocator);
+            return _bytes.ToNativeArray(Allocator.Temp);
         }
 
         public bool Equals(StepData other)
         {
-            return StepCount == other.StepCount && Bytes == other.Bytes;
+            return StepCount == other.StepCount && _bytes == other._bytes;
         }
     }
 }}

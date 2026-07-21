@@ -8,9 +8,9 @@ public class LockStepManagerDynamic : LockStepManagerBase<LockStepManagerDynamic
 {
     public struct StepData : INetworkSerializable, IStepData<StepData>, IEquatable<StepData>
     {
-        public FixedList4096Bytes<byte> Bytes;
+        private FixedList4096Bytes<byte> _bytes;
 
-        public int StepCount { get; set; }
+        public int StepCount { get; private set; }
         public int BufferSize => 4096;
 
         public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
@@ -21,7 +21,7 @@ public class LockStepManagerDynamic : LockStepManagerBase<LockStepManagerDynamic
 
             if (serializer.IsWriter)
             {
-                var array = Bytes.ToNativeArray(Allocator.Temp);
+                var array = _bytes.ToNativeArray(Allocator.Temp);
                 serializer.SerializeValue(ref array, Allocator.Temp);
                 array.Dispose();
             }
@@ -31,11 +31,11 @@ public class LockStepManagerDynamic : LockStepManagerBase<LockStepManagerDynamic
 
                 serializer.SerializeValue(ref array, Allocator.Temp);
 
-                Bytes = new FixedList4096Bytes<byte>();
+                _bytes = new FixedList4096Bytes<byte>();
 
                 unsafe
                 {
-                    Bytes.AddRangeNoResize(array.GetUnsafeReadOnlyPtr(), array.Length);
+                    _bytes.AddRangeNoResize(array.GetUnsafeReadOnlyPtr(), array.Length);
                 }
 
                 array.Dispose();
@@ -53,19 +53,19 @@ public class LockStepManagerDynamic : LockStepManagerBase<LockStepManagerDynamic
 
             return new StepData
             {
+                _bytes    = bytes,
                 StepCount = stepCount,
-                Bytes     = bytes,
             };
         }
 
-        public NativeArray<byte> GetBytes(Allocator allocator)
+        public NativeArray<byte> GetBytes()
         {
-            return Bytes.ToNativeArray(allocator);
+            return _bytes.ToNativeArray(Allocator.Temp);
         }
 
         public bool Equals(StepData other)
         {
-            return StepCount == other.StepCount && Bytes == other.Bytes;
+            return StepCount == other.StepCount && _bytes == other._bytes;
         }
     }
 }}

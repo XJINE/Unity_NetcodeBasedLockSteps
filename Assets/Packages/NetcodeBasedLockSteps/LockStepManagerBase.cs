@@ -10,7 +10,7 @@ public interface IStepData<out T> where T : unmanaged, IStepData<T>
     int BufferSize { get; }
 
     T CreateStepData(int stepCount, FastBufferWriter writer);
-    NativeArray<byte> GetBytes(Allocator allocator);
+    NativeArray<byte> GetBytes();
 }
 
 public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
@@ -167,7 +167,7 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
                 return;
             }
 
-            using (var reader = new FastBufferReader(data.GetBytes(Allocator.Temp), Allocator.None))
+            using (var reader = new FastBufferReader(data.GetBytes(), Allocator.None))
             {
                 StepFunc(stepCount, reader);
             }
