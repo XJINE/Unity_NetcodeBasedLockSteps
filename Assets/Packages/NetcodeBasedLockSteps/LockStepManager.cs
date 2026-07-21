@@ -1,12 +1,11 @@
-﻿using System;
+using System;
 using Unity.Collections;
-using UnityEngine;
 using Unity.Netcode;
 
 namespace NetcodeBasedLockSteps {
-public class LockStepManager : NetworkBehaviour
+public class LockStepManager : LockStepManagerBase<LockStepManager.StepData>
 {
-    private struct StepData : IEquatable<StepData>, INetworkSerializeByMemcpy
+    public struct StepData : IEquatable<StepData>, INetworkSerializeByMemcpy
     {
         // NOTE:
         // Ideally, the data size should be 1024 bytes due to UDP constraints,
@@ -21,169 +20,31 @@ public class LockStepManager : NetworkBehaviour
         }
     }
 
-    public int   maxStepLogs        = 10000;
-    public int   maxStepsPerFrame   = 3;
-    public int   delaySteps         = 0;
-    public float delayStepsInterval = 0.1f;
+    protected override int BufferSize => 512;
 
-    private float _lastProcessDelayStepTime;
-    private float _lastStepTime;
-
-    private readonly NetworkList<StepData> _stepDataList = new();
-
-    public bool EnableSendStep { get; set; } = true; // For debugging.
-    public bool EnableStep     { get; set; } = true; // For debugging.
-
-    public int   StepCountInServer { get; private set; }
-    public int   StepCountInClient { get; private set; }
-    public float StepInterval      { get; private set; }
-
-    public Func<INetworkSerializable>    GetDataFunc { get; set; }
-    public Action<int, FastBufferReader> StepFunc    { get; set; }
-
-    private void Start()
+    protected override StepData CreateStepData(int stepCount, FastBufferWriter writer)
     {
-        NetworkManager.OnClientConnectedCallback += OnClientConnected;
+        var bytes = new FixedList512Bytes<byte>();
+
+        unsafe
+        {
+            bytes.AddRangeNoResize(writer.GetUnsafePtr(), writer.Length);
+        }
+
+        return new StepData
+        {
+            StepCount = stepCount,
+            Bytes     = bytes,
+        };
     }
 
-    public override void OnDestroy()
+    protected override int GetStepCount(in StepData data)
     {
-        if (NetworkManager is not null)
-        {
-            NetworkManager.OnClientConnectedCallback -= OnClientConnected;
-        }
-
-        base.OnDestroy();
+        return data.StepCount;
     }
 
-    private void Update()
+    protected override NativeArray<byte> GetBytes(StepData data, Allocator allocator)
     {
-        if(NetworkManager.IsServer)
-        {
-            SendStep();
-        }
-
-        Step();
-    }
-
-    private void OnClientConnected(ulong clientId)
-    {
-        var missingFirstData = _stepDataList.Count != 0 && 0 < _stepDataList[0].StepCount;
-
-        if (!missingFirstData)
-        {
-            return;
-        }
-
-        NetworkManager.Shutdown();
-    }
-
-    private void SendStep()
-    {
-        if (!EnableSendStep || GetDataFunc is null)
-        {
-            return;
-        }
-
-        var data = GetDataFunc();
-
-        if (data is null)
-        {
-            return;
-        }
-
-        using (var writer = new FastBufferWriter(512, Allocator.Temp))
-        {
-            unsafe
-            {
-                writer.WriteNetworkSerializable(data);
-
-                var bytes = new FixedList512Bytes<byte>();
-                    bytes.AddRangeNoResize(writer.GetUnsafePtr(), writer.Length);
-
-                _stepDataList.Add(new StepData
-                {
-                    StepCount = StepCountInServer,
-                    Bytes     = bytes,
-                });
-            }
-        }
-
-        while (maxStepLogs < _stepDataList.Count)
-        {
-            _stepDataList.RemoveAt(0);
-        }
-
-        StepCountInServer++;
-    }
-
-    private void Step()
-    {
-        if (!EnableStep || _stepDataList.Count == 0 || StepFunc is null)
-        {
-            return;
-        }
-
-        var index = _stepDataList.Count - 1;
-
-        if (_stepDataList[index].StepCount < StepCountInClient)
-        {
-            return;
-        }
-
-        var foundStep = false;
-
-        for (; 0 <= index; index--)
-        {
-            if (_stepDataList[index].StepCount != StepCountInClient)
-            {
-                continue;
-            }
-
-            foundStep = true;
-
-            break;
-        }
-
-        if (!foundStep)
-        {
-            Debug.Log("Required step is not in the data list.");
-            return;
-        }
-
-        var limit = Mathf.Min(index + maxStepsPerFrame, _stepDataList.Count - delaySteps);
-
-        if (limit <= index && delayStepsInterval < Time.time - _lastProcessDelayStepTime)
-        {
-            limit = Mathf.Min(index + 1, _stepDataList.Count);
-            _lastProcessDelayStepTime = Time.time;
-        }
-
-        if (limit <= index)
-        {
-            return;
-        }
-
-        for (; index < limit; index++)
-        {
-            var data = _stepDataList[index];
-
-            if (data.StepCount != StepCountInClient)
-            {
-                Debug.LogError($"Fatal Error in LockStep: Expected step {StepCountInClient}, but got {data.StepCount}");
-                NetworkManager.Shutdown();
-                return;
-            }
-
-            using (var reader = new FastBufferReader(data.Bytes.ToNativeArray(Allocator.Temp), Allocator.None))
-            {
-                StepFunc(data.StepCount, reader);
-            }
-
-            StepCountInClient++;
-        }
-
-        StepInterval  = Time.timeSinceLevelLoad - _lastStepTime;
-        _lastStepTime = Time.timeSinceLevelLoad;
+        return data.Bytes.ToNativeArray(allocator);
     }
 }}
