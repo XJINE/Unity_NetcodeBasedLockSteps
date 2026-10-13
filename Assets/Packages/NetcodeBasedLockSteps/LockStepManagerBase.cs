@@ -53,6 +53,14 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
 
     private void Update()
     {
+        // NOTE:
+        // After Shutdown() the NetworkList still holds its data but the object is despawned.
+        // Without this guard, Step() would hit the fatal path again every frame.
+        if (!IsSpawned)
+        {
+            return;
+        }
+
         if(NetworkManager.IsServer)
         {
             SendStep();
@@ -63,6 +71,18 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
 
     private void OnClientConnected(ulong clientId)
     {
+        // NOTE:
+        // This callback is invoked on the server for every client that connects,
+        // and on a client only for its own connection.
+        // The server alone decides whether a late joiner is accepted;
+        // a rejected client is disconnected and receives the reason via NetworkManager.DisconnectReason.
+        // The local client of a host is never disconnected (not allowed by NGO, and it already has every step).
+
+        if (!NetworkManager.IsServer || clientId == NetworkManager.LocalClientId)
+        {
+            return;
+        }
+
         var missingFirstData = _stepDataList.Count != 0 && 0 < _stepDataList[0].StepCount;
 
         if (!missingFirstData)
@@ -70,7 +90,9 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
             return;
         }
 
-        NetworkManager.Shutdown();
+        Debug.LogWarning($"Client-{clientId} connected after step 0 was discarded. Late join is not supported, disconnecting it.");
+
+        NetworkManager.DisconnectClient(clientId, "LockStep: late join is not supported.");
     }
 
     private void SendStep()
@@ -140,7 +162,7 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
 
         if (!foundStep)
         {
-            Debug.Log("Required step is not in the data list.");
+            Fatal($"Required step {StepCountInClient} is no longer in the data list (oldest: {_stepDataList[0].StepCount}).");
             return;
         }
 
@@ -164,8 +186,7 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
 
             if (stepCount != StepCountInClient)
             {
-                Debug.LogError($"Fatal Error in LockStep: Expected step {StepCountInClient}, but got {stepCount}");
-                NetworkManager.Shutdown();
+                Fatal($"Expected step {StepCountInClient}, but got {stepCount}.");
                 return;
             }
 
@@ -179,5 +200,11 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
 
         StepInterval  = Time.time - _lastStepTime;
         _lastStepTime = Time.time;
+    }
+
+    private void Fatal(string message)
+    {
+        Debug.LogError($"Fatal Error in LockStep: {message}");
+        NetworkManager.Shutdown();
     }
 }}
