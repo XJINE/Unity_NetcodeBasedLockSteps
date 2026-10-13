@@ -11,7 +11,10 @@ public class LockStepManagerDynamic : LockStepManagerBase<LockStepManagerDynamic
         private FixedList4096Bytes<byte> _bytes;
 
         public int StepCount { get; private set; }
-        public int BufferSize => 4096;
+
+        // NOTE:
+        // FixedList4096Bytes<byte>.Capacity is 4094, not 4096 (2 bytes are used for the length).
+        public int BufferSize => _bytes.Capacity;
 
         public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
         {

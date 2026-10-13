@@ -13,7 +13,10 @@ public class LockStepManager : LockStepManagerBase<LockStepManager.StepData>
         private FixedList512Bytes<byte> _bytes;
 
         public int StepCount { get; private set; }
-        public int BufferSize => 512;
+
+        // NOTE:
+        // FixedList512Bytes<byte>.Capacity is 510, not 512 (2 bytes are used for the length).
+        public int BufferSize => _bytes.Capacity;
 
         public StepData CreateStepData(int stepCount, FastBufferWriter writer)
         {
