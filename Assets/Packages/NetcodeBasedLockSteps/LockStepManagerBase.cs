@@ -41,6 +41,22 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
         NetworkManager.OnClientConnectedCallback += OnClientConnected;
     }
 
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+
+        StepCountInServer         = 0;
+        StepCountInClient         = 0;
+        StepInterval              = 0f;
+        _lastStepTime             = Time.time;
+        _lastProcessDelayStepTime = Time.time;
+
+        if (IsServer && _stepDataList.Count != 0)
+        {
+            _stepDataList.Clear();
+        }
+    }
+
     public override void OnDestroy()
     {
         if (NetworkManager is not null)
