@@ -36,11 +36,6 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
     public Func<FastBufferWriter, bool>  WriteStepDataFunc { get; set; }
     public Action<int, FastBufferReader> StepFunc          { get; set; }
 
-    private void Start()
-    {
-        NetworkManager.OnClientConnectedCallback += OnClientConnected;
-    }
-
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
@@ -51,20 +46,24 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
         _lastStepTime             = Time.time;
         _lastProcessDelayStepTime = Time.time;
 
-        if (IsServer && _stepDataList.Count != 0)
+        if (!IsServer)
+        {
+            return;
+        }
+
+        if (_stepDataList.Count != 0)
         {
             _stepDataList.Clear();
         }
+
+        NetworkManager.OnClientConnectedCallback += OnClientConnected;
     }
 
-    public override void OnDestroy()
+    public override void OnNetworkDespawn()
     {
-        if (NetworkManager is not null)
-        {
-            NetworkManager.OnClientConnectedCallback -= OnClientConnected;
-        }
+        NetworkManager.OnClientConnectedCallback -= OnClientConnected;
 
-        base.OnDestroy();
+        base.OnNetworkDespawn();
     }
 
     private void Update()
@@ -87,14 +86,7 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
 
     private void OnClientConnected(ulong clientId)
     {
-        // NOTE:
-        // This callback is invoked on the server for every client that connects,
-        // and on a client only for its own connection.
-        // The server alone decides whether a late joiner is accepted;
-        // a rejected client is disconnected and receives the reason via NetworkManager.DisconnectReason.
-        // The local client of a host is never disconnected (not allowed by NGO, and it already has every step).
-
-        if (!NetworkManager.IsServer || clientId == NetworkManager.LocalClientId)
+        if (clientId == NetworkManager.LocalClientId)
         {
             return;
         }
