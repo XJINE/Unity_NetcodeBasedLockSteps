@@ -155,31 +155,23 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
             return;
         }
 
-        var index = _stepDataList.Count - 1;
+        var oldestStepCount = _stepDataList[0].StepCount;
+        var index           = StepCountInClient - oldestStepCount;
 
-        if (_stepDataList[index].StepCount < StepCountInClient)
+        if (index < 0)
         {
+            Fatal($"Required step {StepCountInClient} is no longer in the data list (oldest: {oldestStepCount}).");
             return;
         }
 
-        var foundStep = false;
-
-        for (; 0 <= index; index--)
+        while (index < _stepDataList.Count && _stepDataList[index].StepCount < StepCountInClient)
         {
-            if (_stepDataList[index].StepCount != StepCountInClient)
-            {
-                continue;
-            }
-
-            foundStep = true;
-
-            break;
+            index++;
         }
 
-        if (!foundStep)
+        if (_stepDataList.Count <= index)
         {
-            Fatal($"Required step {StepCountInClient} is no longer in the data list (oldest: {_stepDataList[0].StepCount}).");
-            return;
+            return; // Not arrived yet.
         }
 
         var limit = Mathf.Min(index + maxStepsPerFrame, _stepDataList.Count - delaySteps);
@@ -199,6 +191,11 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
         {
             var data      = _stepDataList[index];
             var stepCount = data.StepCount;
+
+            if (stepCount < StepCountInClient)
+            {
+                continue;
+            }
 
             if (stepCount != StepCountInClient)
             {
