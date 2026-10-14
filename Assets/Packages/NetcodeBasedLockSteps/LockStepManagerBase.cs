@@ -11,31 +11,64 @@ public interface IStepData<out T> where T : unmanaged, IStepData<T>
     int Length     { get; }
 
     T CreateStepData(int stepCount, FastBufferWriter writer);
+
     unsafe byte* GetUnsafePtr(); // Points into this instance; keep it alive while reading.
 }
 
-public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
-    where TStepData : unmanaged, IEquatable<TStepData>, IStepData<TStepData>
+public abstract class LockStepManagerBase : NetworkBehaviour
 {
     public int   maxStepLogs        = 10000;
     public int   maxStepsPerFrame   = 3;
     public int   delaySteps         = 0;
     public float delayStepsInterval = 0.1f;
 
+    public bool EnableSendStep { get; set; } = true; // For debugging.
+    public bool EnableStep     { get; set; } = true; // For debugging.
+
+    public int   StepCountInServer { get; protected set; }
+    public int   StepCountInClient { get; protected set; }
+    public float StepInterval      { get; protected set; }
+
+    public Func<FastBufferWriter, bool>  WriteStepDataFunc { get; set; }
+    public Action<int, FastBufferReader> StepFunc          { get; set; }
+
+    protected abstract void SendStep();
+    protected abstract void Step();
+
+    private void Update()
+    {
+        // NOTE:
+        // After Shutdown() the NetworkList still holds its data but the object is despawned.
+        // Without this guard, Step() would hit the fatal path again every frame.
+        if (!IsSpawned)
+        {
+            return;
+        }
+
+        if(NetworkManager.IsServer)
+        {
+            SendStep();
+        }
+
+        Step();
+    }
+
+    protected void Fatal(string message)
+    {
+        Debug.LogError($"Fatal Error in LockStep: {message}");
+        NetworkManager.Shutdown();
+    }
+}
+
+public abstract class LockStepManagerBase<TStepData> : LockStepManagerBase
+    where TStepData : unmanaged, IEquatable<TStepData>, IStepData<TStepData>
+{
     private float _lastProcessDelayStepTime;
     private float _lastStepTime;
 
     private readonly NetworkList<TStepData> _stepDataList = new();
 
-    public bool EnableSendStep { get; set; } = true; // For debugging.
-    public bool EnableStep     { get; set; } = true; // For debugging.
-
-    public int   StepCountInServer { get; private set; }
-    public int   StepCountInClient { get; private set; }
-    public float StepInterval      { get; private set; }
-
-    public Func<FastBufferWriter, bool>  WriteStepDataFunc { get; set; }
-    public Action<int, FastBufferReader> StepFunc          { get; set; }
+    private FastBufferWriter _writer;
 
     public override void OnNetworkSpawn()
     {
@@ -57,6 +90,11 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
             _stepDataList.Clear();
         }
 
+        if (!_writer.IsInitialized)
+        {
+            _writer = new FastBufferWriter(default(TStepData).BufferSize, Allocator.Persistent);
+        }
+
         NetworkManager.OnClientConnectedCallback += OnClientConnected;
     }
 
@@ -64,25 +102,12 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
     {
         NetworkManager.OnClientConnectedCallback -= OnClientConnected;
 
+        if (_writer.IsInitialized)
+        {
+            _writer.Dispose();
+        }
+
         base.OnNetworkDespawn();
-    }
-
-    private void Update()
-    {
-        // NOTE:
-        // After Shutdown() the NetworkList still holds its data but the object is despawned.
-        // Without this guard, Step() would hit the fatal path again every frame.
-        if (!IsSpawned)
-        {
-            return;
-        }
-
-        if(NetworkManager.IsServer)
-        {
-            SendStep();
-        }
-
-        Step();
     }
 
     private void OnClientConnected(ulong clientId)
@@ -104,7 +129,7 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
         NetworkManager.DisconnectClient(clientId, "LockStep: late join is not supported.");
     }
 
-    private void SendStep()
+    protected override void SendStep()
     {
         if (!EnableSendStep || WriteStepDataFunc is null)
         {
@@ -117,21 +142,21 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
 
         var template = default(TStepData);
 
-        using (var writer = new FastBufferWriter(template.BufferSize, Allocator.Temp))
+        _writer.Seek(0);
+        _writer.Truncate();
+
+        if (!WriteStepDataFunc(_writer))
         {
-            if (!WriteStepDataFunc(writer))
-            {
-                return;
-            }
-
-            if (template.BufferSize < writer.Length)
-            {
-                Debug.LogError($"Step data exceeds buffer size: {writer.Length} > {template.BufferSize}");
-                return;
-            }
-
-            _stepDataList.Add(template.CreateStepData(StepCountInServer, writer));
+            return;
         }
+
+        if (template.BufferSize < _writer.Length)
+        {
+            Debug.LogError($"Step data exceeds buffer size: {_writer.Length} > {template.BufferSize}");
+            return;
+        }
+
+        _stepDataList.Add(template.CreateStepData(StepCountInServer, _writer));
 
         while (maxStepLogs < _stepDataList.Count)
         {
@@ -141,7 +166,7 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
         StepCountInServer++;
     }
 
-    private void Step()
+    protected override void Step()
     {
         if (!EnableStep || _stepDataList.Count == 0 || StepFunc is null)
         {
@@ -209,11 +234,5 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
 
         StepInterval  = Time.time - _lastStepTime;
         _lastStepTime = Time.time;
-    }
-
-    private void Fatal(string message)
-    {
-        Debug.LogError($"Fatal Error in LockStep: {message}");
-        NetworkManager.Shutdown();
     }
 }}

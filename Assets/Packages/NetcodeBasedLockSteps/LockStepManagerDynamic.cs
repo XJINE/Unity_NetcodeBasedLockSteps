@@ -8,41 +8,43 @@ public class LockStepManagerDynamic : LockStepManagerBase<LockStepManagerDynamic
 {
     public struct StepData : INetworkSerializable, IStepData<StepData>, IEquatable<StepData>
     {
-        private FixedList4096Bytes<byte> _bytes;
-
-        public int StepCount { get; private set; }
-
         // NOTE:
         // FixedList4096Bytes<byte>.Capacity is 4094, not 4096 (2 bytes are used for the length).
+
+        private FixedList4096Bytes<byte> _bytes;
+        private int                      _stepCount;
+
+        public int StepCount  => _stepCount;
         public int BufferSize => _bytes.Capacity;
         public int Length     => _bytes.Length;
 
         public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
         {
-            var stepCount = StepCount;
-            serializer.SerializeValue(ref stepCount);
-            StepCount = stepCount;
+            var length = _bytes.Length;
 
-            if (serializer.IsWriter)
+            serializer.SerializeValue(ref _stepCount);
+            serializer.SerializeValue(ref length);
+
+            if (serializer.IsReader)
             {
-                var array = _bytes.ToNativeArray(Allocator.Temp);
-                serializer.SerializeValue(ref array, Allocator.Temp);
-                array.Dispose();
+                _bytes.Length = length;
             }
-            else // IsReader
+
+            if (length == 0)
             {
-                var array = default(NativeArray<byte>);
+                return;
+            }
 
-                serializer.SerializeValue(ref array, Allocator.Temp);
-
-                _bytes = new FixedList4096Bytes<byte>();
-
-                unsafe
+            unsafe
+            {
+                if (serializer.IsWriter)
                 {
-                    _bytes.AddRangeNoResize(array.GetUnsafeReadOnlyPtr(), array.Length);
+                    serializer.GetFastBufferWriter().WriteBytesSafe(GetUnsafePtr(), length);
                 }
-
-                array.Dispose();
+                else
+                {
+                    serializer.GetFastBufferReader().ReadBytesSafe(GetUnsafePtr(), length);
+                }
             }
         }
 
@@ -57,8 +59,8 @@ public class LockStepManagerDynamic : LockStepManagerBase<LockStepManagerDynamic
 
             return new StepData
             {
-                _bytes    = bytes,
-                StepCount = stepCount,
+                _bytes     = bytes,
+                _stepCount = stepCount,
             };
         }
 
@@ -69,7 +71,7 @@ public class LockStepManagerDynamic : LockStepManagerBase<LockStepManagerDynamic
 
         public bool Equals(StepData other)
         {
-            return StepCount == other.StepCount && _bytes == other._bytes;
+            return _stepCount == other._stepCount && _bytes == other._bytes;
         }
     }
 }}
