@@ -6,9 +6,9 @@ public class LockStepSample : MonoBehaviour
 {
     [SerializeField] private GameObject target;
 
-    private NetworkManager      _networkManager;
-    private LockStepManagerBase _lockStepManager;
-    private bool                _move = true;
+    private NetworkManager  _networkManager;
+    private LockStepManager _lockStepManager;
+    private bool            _move = true;
 
     private struct StepData : INetworkSerializable
     {
@@ -23,7 +23,7 @@ public class LockStepSample : MonoBehaviour
     private void Start()
     {
         _networkManager  = NetworkManager.Singleton;
-        _lockStepManager = FindAnyObjectByType<LockStepManagerBase>();
+        _lockStepManager = FindAnyObjectByType<LockStepManager>();
 
         _lockStepManager.WriteStepDataFunc = WriteStepData;
         _lockStepManager.StepFunc          = OnStep;
