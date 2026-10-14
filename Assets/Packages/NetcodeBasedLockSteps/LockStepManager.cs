@@ -84,9 +84,10 @@ public class LockStepManager : NetworkBehaviour
     public bool EnableSendStep { get; set; } = true; // For debugging.
     public bool EnableStep     { get; set; } = true; // For debugging.
 
-    public int   StepCountInServer { get; private set; }
-    public int   StepCountInClient { get; private set; }
-    public float StepInterval      { get; private set; }
+    public int   StepCountInServer   { get; private set; }
+    public int   StepCountInClient   { get; private set; }
+    public float StepInterval        { get; private set; }
+    public bool  IsWaitingForRestart { get; private set; }
 
     public Func<FastBufferWriter, bool>  WriteStepDataFunc { get; set; }
     public Action<int, FastBufferReader> StepFunc          { get; set; }
@@ -105,12 +106,18 @@ public class LockStepManager : NetworkBehaviour
         base.OnNetworkSpawn();
 
         StepCountInServer     = 0;
+        IsWaitingForRestart   = false;
         _restartCountInClient = _restartCount.Value;
 
         ResetStepCountInClient();
 
         if (!IsServer)
         {
+            if (_stepDataList.Count != 0 && 0 < _stepDataList[0].StepCount)
+            {
+                WaitForRestart("Connected after step 0 was discarded.");
+            }
+
             return;
         }
 
@@ -123,39 +130,16 @@ public class LockStepManager : NetworkBehaviour
         {
             _writer = new FastBufferWriter(default(StepData).BufferSize, Allocator.Persistent);
         }
-
-        NetworkManager.OnClientConnectedCallback += OnClientConnected;
     }
 
     public override void OnNetworkDespawn()
     {
-        NetworkManager.OnClientConnectedCallback -= OnClientConnected;
-
         if (_writer.IsInitialized)
         {
             _writer.Dispose();
         }
 
         base.OnNetworkDespawn();
-    }
-
-    private void OnClientConnected(ulong clientId)
-    {
-        if (clientId == NetworkManager.LocalClientId)
-        {
-            return;
-        }
-
-        var missingFirstData = _stepDataList.Count != 0 && 0 < _stepDataList[0].StepCount;
-
-        if (!missingFirstData)
-        {
-            return;
-        }
-
-        Debug.LogWarning($"Client-{clientId} connected after step 0 was discarded. Late join is not supported, disconnecting it.");
-
-        NetworkManager.DisconnectClient(clientId, "LockStep: late join is not supported.");
     }
 
     public void Restart()
@@ -181,7 +165,7 @@ public class LockStepManager : NetworkBehaviour
 
     private void Update()
     {
-        if (!IsSpawned) // After Shutdown() the despawned NetworkList still holds data; avoid re-hitting the fatal path.
+        if (!IsSpawned) // After Shutdown() the despawned NetworkList still holds data.
         {
             return;
         }
@@ -230,8 +214,14 @@ public class LockStepManager : NetworkBehaviour
         if (_restartCountInClient != _restartCount.Value)
         {
             _restartCountInClient = _restartCount.Value;
+            IsWaitingForRestart   = false;
             ResetStepCountInClient();
             RestartFunc?.Invoke();
+        }
+
+        if (IsWaitingForRestart)
+        {
+            return;
         }
 
         if (!EnableStep || _stepDataList.Count == 0 || StepFunc is null)
@@ -244,7 +234,7 @@ public class LockStepManager : NetworkBehaviour
 
         if (index < 0)
         {
-            Fatal($"Required step {StepCountInClient} is no longer in the data list (oldest: {oldestStepCount}).");
+            WaitForRestart($"Required step {StepCountInClient} is no longer in the data list (oldest: {oldestStepCount}).");
             return;
         }
 
@@ -283,7 +273,7 @@ public class LockStepManager : NetworkBehaviour
 
             if (stepCount != StepCountInClient)
             {
-                Fatal($"Expected step {StepCountInClient}, but got {stepCount}.");
+                WaitForRestart($"Expected step {StepCountInClient}, but got {stepCount}.");
                 return;
             }
 
@@ -300,9 +290,9 @@ public class LockStepManager : NetworkBehaviour
         _lastStepTime = Time.time;
     }
 
-    private void Fatal(string message)
+    private void WaitForRestart(string message)
     {
-        Debug.LogError($"Fatal Error in LockStep: {message}");
-        NetworkManager.Shutdown();
+        Debug.LogWarning($"LockStep: {message} Waiting for the next Restart().");
+        IsWaitingForRestart = true;
     }
 }}

@@ -44,6 +44,12 @@ public class LockStepSample : MonoBehaviour
         else
         {
             GUILayout.Label(isHost ? "Host" : isServer ? "Server" : "Client");
+
+            if (_lockStepManager.IsWaitingForRestart)
+            {
+                GUILayout.Label("Waiting for restart...");
+            }
+
             GUILayout.Label("Step Count : " + (isServer ? _lockStepManager.StepCountInServer
                                                         : _lockStepManager.StepCountInClient));
 
