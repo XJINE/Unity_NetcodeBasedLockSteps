@@ -88,6 +88,7 @@ public class LockStepManager : NetworkBehaviour
     public int   StepCountInClient   { get; private set; }
     public float StepInterval        { get; private set; }
     public bool  IsWaitingForRestart { get; private set; }
+    public bool  IsPaused            => _isPaused.Value;
 
     public Func<FastBufferWriter, bool>  WriteStepDataFunc { get; set; }
     public Action<int, FastBufferReader> StepFunc          { get; set; }
@@ -100,6 +101,7 @@ public class LockStepManager : NetworkBehaviour
 
     private readonly NetworkList<StepData> _stepDataList = new();
     private readonly NetworkVariable<int>  _restartCount = new();
+    private readonly NetworkVariable<bool> _isPaused     = new();
 
     public override void OnNetworkSpawn()
     {
@@ -126,6 +128,11 @@ public class LockStepManager : NetworkBehaviour
             _stepDataList.Clear();
         }
 
+        if (_isPaused.Value)
+        {
+            _isPaused.Value = false;
+        }
+
         if (!_writer.IsInitialized)
         {
             _writer = new FastBufferWriter(default(StepData).BufferSize, Allocator.Persistent);
@@ -142,6 +149,17 @@ public class LockStepManager : NetworkBehaviour
         base.OnNetworkDespawn();
     }
 
+    public void Pause()
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning("Pause() is only available on the server.");
+            return;
+        }
+
+        _isPaused.Value = true;
+    }
+
     public void Restart()
     {
         if (!IsServer)
@@ -150,6 +168,7 @@ public class LockStepManager : NetworkBehaviour
             return;
         }
 
+        _isPaused.Value = false;
         _stepDataList.Clear();
         StepCountInServer = 0;
         _restartCount.Value++;
@@ -180,7 +199,7 @@ public class LockStepManager : NetworkBehaviour
 
     private void SendStep()
     {
-        if (!EnableSendStep || WriteStepDataFunc is null)
+        if (_isPaused.Value || !EnableSendStep || WriteStepDataFunc is null)
         {
             return;
         }

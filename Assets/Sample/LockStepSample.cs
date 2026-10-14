@@ -50,6 +50,11 @@ public class LockStepSample : MonoBehaviour
                 GUILayout.Label("Waiting for restart...");
             }
 
+            if (_lockStepManager.IsPaused)
+            {
+                GUILayout.Label("Paused");
+            }
+
             GUILayout.Label("Step Count : " + (isServer ? _lockStepManager.StepCountInServer
                                                         : _lockStepManager.StepCountInClient));
 
@@ -62,6 +67,11 @@ public class LockStepSample : MonoBehaviour
                 if (GUILayout.Button(_move ? "Stop" : "Move"))
                 {
                     _move = !_move;
+                }
+
+                if (!_lockStepManager.IsPaused && GUILayout.Button("Pause"))
+                {
+                    _lockStepManager.Pause();
                 }
 
                 if (GUILayout.Button("Restart"))
