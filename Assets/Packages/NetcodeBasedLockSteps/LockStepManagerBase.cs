@@ -8,9 +8,10 @@ public interface IStepData<out T> where T : unmanaged, IStepData<T>
 {
     int StepCount  { get; }
     int BufferSize { get; }
+    int Length     { get; }
 
     T CreateStepData(int stepCount, FastBufferWriter writer);
-    NativeArray<byte> GetBytes(); // Do not define as a property since it requires alloc.
+    unsafe byte* GetUnsafePtr(); // Points into this instance; keep it alive while reading.
 }
 
 public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
@@ -195,9 +196,12 @@ public abstract class LockStepManagerBase<TStepData> : NetworkBehaviour
                 return;
             }
 
-            using (var reader = new FastBufferReader(data.GetBytes(), Allocator.None))
+            unsafe
             {
-                StepFunc(stepCount, reader);
+                using (var reader = new FastBufferReader(data.GetUnsafePtr(), Allocator.None, data.Length))
+                {
+                    StepFunc(stepCount, reader);
+                }
             }
 
             StepCountInClient++;

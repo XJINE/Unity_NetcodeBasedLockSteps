@@ -15,6 +15,7 @@ public class LockStepManagerDynamic : LockStepManagerBase<LockStepManagerDynamic
         // NOTE:
         // FixedList4096Bytes<byte>.Capacity is 4094, not 4096 (2 bytes are used for the length).
         public int BufferSize => _bytes.Capacity;
+        public int Length     => _bytes.Length;
 
         public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
         {
@@ -61,9 +62,9 @@ public class LockStepManagerDynamic : LockStepManagerBase<LockStepManagerDynamic
             };
         }
 
-        public NativeArray<byte> GetBytes()
+        public unsafe byte* GetUnsafePtr()
         {
-            return _bytes.ToNativeArray(Allocator.Temp);
+            return _bytes.Length == 0 ? null : (byte*)UnsafeUtility.AddressOf(ref _bytes.ElementAt(0));
         }
 
         public bool Equals(StepData other)

@@ -1,5 +1,6 @@
 using System;
 using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 using Unity.Netcode;
 
 namespace NetcodeBasedLockSteps {
@@ -17,6 +18,7 @@ public class LockStepManager : LockStepManagerBase<LockStepManager.StepData>
         // NOTE:
         // FixedList512Bytes<byte>.Capacity is 510, not 512 (2 bytes are used for the length).
         public int BufferSize => _bytes.Capacity;
+        public int Length     => _bytes.Length;
 
         public StepData CreateStepData(int stepCount, FastBufferWriter writer)
         {
@@ -34,9 +36,9 @@ public class LockStepManager : LockStepManagerBase<LockStepManager.StepData>
             };
         }
 
-        public NativeArray<byte> GetBytes()
+        public unsafe byte* GetUnsafePtr()
         {
-            return _bytes.ToNativeArray(Allocator.Temp);
+            return _bytes.Length == 0 ? null : (byte*)UnsafeUtility.AddressOf(ref _bytes.ElementAt(0));
         }
 
         public bool Equals(StepData other)
