@@ -31,6 +31,9 @@ public abstract class LockStepManagerBase : NetworkBehaviour
 
     public Func<FastBufferWriter, bool>  WriteStepDataFunc { get; set; }
     public Action<int, FastBufferReader> StepFunc          { get; set; }
+    public Action                        RestartFunc       { get; set; }
+
+    public abstract void Restart();
 
     protected abstract void SendStep();
     protected abstract void Step();
@@ -67,6 +70,9 @@ public abstract class LockStepManagerBase<TStepData> : LockStepManagerBase
     private float _lastStepTime;
 
     private readonly NetworkList<TStepData> _stepDataList = new();
+    private readonly NetworkVariable<int>   _restartCount = new();
+
+    private int _restartCountInClient;
 
     private FastBufferWriter _writer;
 
@@ -74,11 +80,10 @@ public abstract class LockStepManagerBase<TStepData> : LockStepManagerBase
     {
         base.OnNetworkSpawn();
 
-        StepCountInServer         = 0;
-        StepCountInClient         = 0;
-        StepInterval              = 0f;
-        _lastStepTime             = Time.time;
-        _lastProcessDelayStepTime = Time.time;
+        StepCountInServer     = 0;
+        _restartCountInClient = _restartCount.Value;
+
+        ResetStepCountInClient();
 
         if (!IsServer)
         {
@@ -129,6 +134,27 @@ public abstract class LockStepManagerBase<TStepData> : LockStepManagerBase
         NetworkManager.DisconnectClient(clientId, "LockStep: late join is not supported.");
     }
 
+    public override void Restart()
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning("Restart() is only available on the server.");
+            return;
+        }
+
+        _stepDataList.Clear();
+        StepCountInServer = 0;
+        _restartCount.Value++;
+    }
+
+    private void ResetStepCountInClient()
+    {
+        StepCountInClient         = 0;
+        StepInterval              = 0f;
+        _lastStepTime             = Time.time;
+        _lastProcessDelayStepTime = Time.time;
+    }
+
     protected override void SendStep()
     {
         if (!EnableSendStep || WriteStepDataFunc is null)
@@ -168,6 +194,13 @@ public abstract class LockStepManagerBase<TStepData> : LockStepManagerBase
 
     protected override void Step()
     {
+        if (_restartCountInClient != _restartCount.Value)
+        {
+            _restartCountInClient = _restartCount.Value;
+            ResetStepCountInClient();
+            RestartFunc?.Invoke();
+        }
+
         if (!EnableStep || _stepDataList.Count == 0 || StepFunc is null)
         {
             return;
@@ -205,7 +238,7 @@ public abstract class LockStepManagerBase<TStepData> : LockStepManagerBase
             return;
         }
 
-        for (; index < limit; index++)
+        for (; index < limit && index < _stepDataList.Count; index++) // Restart() may be called inside StepFunc.
         {
             var data      = _stepDataList[index];
             var stepCount = data.StepCount;

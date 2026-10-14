@@ -8,7 +8,7 @@ public class LockStepSample : MonoBehaviour
 
     private NetworkManager      _networkManager;
     private LockStepManagerBase _lockStepManager;
-    private bool            _move = true;
+    private bool                _move = true;
 
     private struct StepData : INetworkSerializable
     {
@@ -27,6 +27,7 @@ public class LockStepSample : MonoBehaviour
 
         _lockStepManager.WriteStepDataFunc = WriteStepData;
         _lockStepManager.StepFunc          = OnStep;
+        _lockStepManager.RestartFunc       = OnRestart;
     }
 
     private void OnGUI()
@@ -56,6 +57,11 @@ public class LockStepSample : MonoBehaviour
                 {
                     _move = !_move;
                 }
+
+                if (GUILayout.Button("Restart"))
+                {
+                    _lockStepManager.Restart();
+                }
             }
         }
     }
@@ -83,5 +89,10 @@ public class LockStepSample : MonoBehaviour
             nextPosition.z = Mathf.Clamp(nextPosition.z, -3f, 3f);
 
         target.transform.position = nextPosition;
+    }
+
+    private void OnRestart()
+    {
+        target.transform.position = Vector3.zero;
     }
 }
