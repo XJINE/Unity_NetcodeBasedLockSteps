@@ -419,7 +419,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   ShowTopMostFoldoutHeaderGroup: 1
-  maxStepLogs: 10000
+  maxStepLogs: 2000
   maxStepsPerFrame: 10
   delaySteps: 0
   delayStepsInterval: 0.1

@@ -87,29 +87,29 @@ public class LockStepManager : NetworkBehaviour
     public int   StepCountInServer   { get; private set; }
     public int   StepCountInClient   { get; private set; }
     public float StepInterval        { get; private set; }
-    public bool  IsWaitingForRestart { get; private set; }
+    public bool  IsWaitingForReset   { get; private set; }
     public bool  IsPaused            => _isPaused.Value;
 
     public Func<FastBufferWriter, bool>  WriteStepDataFunc { get; set; }
     public Action<int, FastBufferReader> StepFunc          { get; set; }
-    public Action                        RestartFunc       { get; set; }
+    public Action                        ResetFunc         { get; set; }
 
     private FastBufferWriter _writer;
     private float            _lastProcessDelayStepTime;
     private float            _lastStepTime;
-    private int              _restartCountInClient;
+    private int              _resetCountInClient;
 
     private readonly NetworkList<StepData> _stepDataList = new();
-    private readonly NetworkVariable<int>  _restartCount = new();
+    private readonly NetworkVariable<int>  _resetCount   = new();
     private readonly NetworkVariable<bool> _isPaused     = new();
 
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
 
-        StepCountInServer     = 0;
-        IsWaitingForRestart   = false;
-        _restartCountInClient = _restartCount.Value;
+        StepCountInServer   = 0;
+        IsWaitingForReset   = false;
+        _resetCountInClient = _resetCount.Value;
 
         ResetStepCountInClient();
 
@@ -117,7 +117,7 @@ public class LockStepManager : NetworkBehaviour
         {
             if (_stepDataList.Count != 0 && 0 < _stepDataList[0].StepCount)
             {
-                WaitForRestart("Connected after step 0 was discarded.");
+                WaitForReset("Connected after step 0 was discarded.");
             }
 
             return;
@@ -169,9 +169,24 @@ public class LockStepManager : NetworkBehaviour
         }
 
         _isPaused.Value = false;
+    }
+
+    public void Reset()
+    {
+        if (!IsSpawned) // Unity also calls Reset() in the Editor when the component is added.
+        {
+            return;
+        }
+
+        if (!IsServer)
+        {
+            Debug.LogWarning("Reset() is only available on the server.");
+            return;
+        }
+
         _stepDataList.Clear();
         StepCountInServer = 0;
-        _restartCount.Value++;
+        _resetCount.Value++;
     }
 
     private void ResetStepCountInClient()
@@ -230,15 +245,15 @@ public class LockStepManager : NetworkBehaviour
 
     private void Step()
     {
-        if (_restartCountInClient != _restartCount.Value)
+        if (_resetCountInClient != _resetCount.Value)
         {
-            _restartCountInClient = _restartCount.Value;
-            IsWaitingForRestart   = false;
+            _resetCountInClient = _resetCount.Value;
+            IsWaitingForReset   = false;
             ResetStepCountInClient();
-            RestartFunc?.Invoke();
+            ResetFunc?.Invoke();
         }
 
-        if (IsWaitingForRestart)
+        if (IsWaitingForReset)
         {
             return;
         }
@@ -253,7 +268,7 @@ public class LockStepManager : NetworkBehaviour
 
         if (index < 0)
         {
-            WaitForRestart($"Required step {StepCountInClient} is no longer in the data list (oldest: {oldestStepCount}).");
+            WaitForReset($"Required step {StepCountInClient} is no longer in the data list (oldest: {oldestStepCount}).");
             return;
         }
 
@@ -280,7 +295,7 @@ public class LockStepManager : NetworkBehaviour
             return;
         }
 
-        for (; index < limit && index < _stepDataList.Count; index++) // Restart() may be called inside StepFunc.
+        for (; index < limit && index < _stepDataList.Count; index++) // Reset() may be called inside StepFunc.
         {
             var data      = _stepDataList[index];
             var stepCount = data.StepCount;
@@ -292,7 +307,7 @@ public class LockStepManager : NetworkBehaviour
 
             if (stepCount != StepCountInClient)
             {
-                WaitForRestart($"Expected step {StepCountInClient}, but got {stepCount}.");
+                WaitForReset($"Expected step {StepCountInClient}, but got {stepCount}.");
                 return;
             }
 
@@ -309,9 +324,9 @@ public class LockStepManager : NetworkBehaviour
         _lastStepTime = Time.time;
     }
 
-    private void WaitForRestart(string message)
+    private void WaitForReset(string message)
     {
-        Debug.LogWarning($"LockStep: {message} Waiting for the next Restart().");
-        IsWaitingForRestart = true;
+        Debug.LogWarning($"LockStep: {message} Waiting for the next Reset().");
+        IsWaitingForReset = true;
     }
 }}

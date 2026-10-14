@@ -8,15 +8,14 @@ public class LockStepSample : MonoBehaviour
 
     private NetworkManager  _networkManager;
     private LockStepManager _lockStepManager;
-    private bool            _move = true;
 
     private struct StepData : INetworkSerializable
     {
-        public Vector3 Position;
+        public Vector3 RandomWalk;
 
         public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
         {
-            serializer.SerializeValue(ref Position);
+            serializer.SerializeValue(ref RandomWalk);
         }
     }
 
@@ -27,7 +26,7 @@ public class LockStepSample : MonoBehaviour
 
         _lockStepManager.WriteStepDataFunc = WriteStepData;
         _lockStepManager.StepFunc          = OnStep;
-        _lockStepManager.RestartFunc       = OnRestart;
+        _lockStepManager.ResetFunc         = OnReset;
     }
 
     private void OnGUI()
@@ -45,9 +44,9 @@ public class LockStepSample : MonoBehaviour
         {
             GUILayout.Label(isHost ? "Host" : isServer ? "Server" : "Client");
 
-            if (_lockStepManager.IsWaitingForRestart)
+            if (_lockStepManager.IsWaitingForReset)
             {
-                GUILayout.Label("Waiting for restart...");
+                GUILayout.Label("Waiting for reset...");
             }
 
             if (_lockStepManager.IsPaused)
@@ -64,19 +63,18 @@ public class LockStepSample : MonoBehaviour
 
             if (isHost || isServer)
             {
-                if (GUILayout.Button(_move ? "Stop" : "Move"))
+                if (_lockStepManager.IsPaused)
                 {
-                    _move = !_move;
+                    if (GUILayout.Button("Restart")) { _lockStepManager.Restart(); }
+                }
+                else
+                {
+                    if (GUILayout.Button("Pause"))   { _lockStepManager.Pause();   }
                 }
 
-                if (!_lockStepManager.IsPaused && GUILayout.Button("Pause"))
+                if (GUILayout.Button("Reset"))
                 {
-                    _lockStepManager.Pause();
-                }
-
-                if (GUILayout.Button("Restart"))
-                {
-                    _lockStepManager.Restart();
+                    _lockStepManager.Reset();
                 }
             }
         }
@@ -86,7 +84,7 @@ public class LockStepSample : MonoBehaviour
     {
         var data = new StepData
         {
-            Position = _move ? Random.onUnitSphere : Vector3.zero
+            RandomWalk = Random.onUnitSphere
         };
 
         writer.WriteNetworkSerializable(data);
@@ -97,9 +95,8 @@ public class LockStepSample : MonoBehaviour
     private void OnStep(int stepCount, FastBufferReader reader)
     {
         reader.ReadValue(out StepData stepData);
-        // reader.ReadValueSafe(out StepData stepData);
 
-        var nextPosition   = target.transform.position + stepData.Position;
+        var nextPosition   = target.transform.position + stepData.RandomWalk;
             nextPosition.x = Mathf.Clamp(nextPosition.x, -3f, 3f);
             nextPosition.y = Mathf.Clamp(nextPosition.y, -3f, 3f);
             nextPosition.z = Mathf.Clamp(nextPosition.z, -3f, 3f);
@@ -107,7 +104,7 @@ public class LockStepSample : MonoBehaviour
         target.transform.position = nextPosition;
     }
 
-    private void OnRestart()
+    private void OnReset()
     {
         target.transform.position = Vector3.zero;
     }
