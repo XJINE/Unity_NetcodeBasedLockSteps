@@ -6,23 +6,51 @@ using Unity.Netcode;
 namespace NetcodeBasedLockSteps {
 public class LockStepManager : LockStepManagerBase<LockStepManager.StepData>
 {
-    public struct StepData : INetworkSerializeByMemcpy, IStepData<StepData>, IEquatable<StepData>
+    public struct StepData : INetworkSerializable, IStepData<StepData>, IEquatable<StepData>
     {
         // NOTE:
-        // Ideally, the data size should be 1024 bytes due to UDP constraints,
-        // but the next available size after 512 is 4096.
-        private FixedList512Bytes<byte> _bytes;
+        // FixedList4096Bytes<byte>.Capacity is 4094, not 4096 (2 bytes are used for the length).
 
-        public int StepCount { get; private set; }
+        private FixedList4096Bytes<byte> _bytes;
+        private int                      _stepCount;
 
-        // NOTE:
-        // FixedList512Bytes<byte>.Capacity is 510, not 512 (2 bytes are used for the length).
+        public int StepCount  => _stepCount;
         public int BufferSize => _bytes.Capacity;
         public int Length     => _bytes.Length;
 
+        public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+        {
+            var length = _bytes.Length;
+
+            serializer.SerializeValue(ref _stepCount);
+            serializer.SerializeValue(ref length);
+
+            if (serializer.IsReader)
+            {
+                _bytes.Length = length;
+            }
+
+            if (length == 0)
+            {
+                return;
+            }
+
+            unsafe
+            {
+                if (serializer.IsWriter)
+                {
+                    serializer.GetFastBufferWriter().WriteBytesSafe(GetUnsafePtr(), length);
+                }
+                else
+                {
+                    serializer.GetFastBufferReader().ReadBytesSafe(GetUnsafePtr(), length);
+                }
+            }
+        }
+
         public StepData CreateStepData(int stepCount, FastBufferWriter writer)
         {
-            var bytes = new FixedList512Bytes<byte>();
+            var bytes = new FixedList4096Bytes<byte>();
 
             unsafe
             {
@@ -31,8 +59,8 @@ public class LockStepManager : LockStepManagerBase<LockStepManager.StepData>
 
             return new StepData
             {
-                _bytes    = bytes,
-                StepCount = stepCount,
+                _bytes     = bytes,
+                _stepCount = stepCount,
             };
         }
 
@@ -43,7 +71,7 @@ public class LockStepManager : LockStepManagerBase<LockStepManager.StepData>
 
         public bool Equals(StepData other)
         {
-            return StepCount == other.StepCount && _bytes == other._bytes;
+            return _stepCount == other._stepCount && _bytes == other._bytes;
         }
     }
 }}
