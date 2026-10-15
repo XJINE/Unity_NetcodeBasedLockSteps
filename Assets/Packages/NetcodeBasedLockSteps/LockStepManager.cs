@@ -153,7 +153,7 @@ public class LockStepManager : NetworkBehaviour
     {
         if (!IsServer)
         {
-            Debug.LogWarning("Pause() is only available on the server.");
+            Debug.LogWarning($"{nameof(Pause)}() is only available on the server.");
             return;
         }
 
@@ -164,7 +164,7 @@ public class LockStepManager : NetworkBehaviour
     {
         if (!IsServer)
         {
-            Debug.LogWarning("Restart() is only available on the server.");
+            Debug.LogWarning($"{nameof(Reset)}() is only available on the server.");
             return;
         }
 
@@ -180,7 +180,7 @@ public class LockStepManager : NetworkBehaviour
 
         if (!IsServer)
         {
-            Debug.LogWarning("Reset() is only available on the server.");
+            Debug.LogWarning($"{nameof(Reset)}() is only available on the server.");
             return;
         }
 
@@ -214,6 +214,11 @@ public class LockStepManager : NetworkBehaviour
 
     private void SendStep()
     {
+        if (_resetCountInClient != _resetCount.Value)
+        {
+            return;
+        }
+
         if (_isPaused.Value || !EnableSendStep || WriteStepDataFunc is null)
         {
             return;
@@ -224,6 +229,12 @@ public class LockStepManager : NetworkBehaviour
 
         if (!WriteStepDataFunc(_writer))
         {
+            return;
+        }
+
+        if (_resetCountInClient != _resetCount.Value)
+        {
+            Debug.LogWarning($"{nameof(Reset)}() was called inside {nameof(WriteStepDataFunc)}.");
             return;
         }
 
@@ -326,7 +337,7 @@ public class LockStepManager : NetworkBehaviour
 
     private void WaitForReset(string message)
     {
-        Debug.LogWarning($"LockStep: {message} Waiting for the next Reset().");
+        Debug.LogWarning($"LockStep: {message} Waiting for the next {nameof(Reset)}().");
         IsWaitingForReset = true;
     }
 }}
